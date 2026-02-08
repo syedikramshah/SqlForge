@@ -1,2 +1,413 @@
 # SqlForge
-A powerful SQL parser and reconstructor library for .NET. Supports SQL Anywhere dialect with tokenization, AST generation, SQL formatting, and query reconstruction.
+
+[![NuGet](https://img.shields.io/nuget/v/SqlForge.svg)](https://www.nuget.org/packages/SqlForge/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET](https://img.shields.io/badge/.NET-Standard%202.0-blue.svg)](https://dotnet.microsoft.com/)
+
+A powerful SQL parser, AST generator, and query reconstructor library for .NET. SqlForge tokenizes SQL queries, builds an Abstract Syntax Tree (AST), and can reconstruct or format SQL from the AST representation.
+
+## Features
+
+- **SQL Tokenization** - Full lexical analysis with support for keywords, identifiers, literals, operators, and comments
+- **AST Generation** - Parse SQL into a traversable Abstract Syntax Tree
+- **SQL Reconstruction** - Rebuild valid SQL from AST nodes
+- **SQL Formatting** - Pretty-print AST for debugging and visualization
+- **Dialect Support** - Designed for SQL Anywhere with extensible architecture for other dialects
+- **Complex Query Support** - Handles subqueries, JOINs, set operators, and nested expressions
+
+## Installation
+
+### NuGet Package Manager
+
+```powershell
+Install-Package SqlForge
+```
+
+### .NET CLI
+
+```bash
+dotnet add package SqlForge
+```
+
+### PackageReference
+
+```xml
+<PackageReference Include="SqlForge" Version="1.0.0" />
+```
+
+## Quick Start
+
+```csharp
+using SqlForge.Parsers;
+using SqlForge.Reconstructors;
+using SqlForge.Formatters;
+
+// Create parser with statement factory
+var factory = new SqlAnywhereStatementParserFactory();
+var parser = new SqlAnywhereParser(factory);
+
+// Parse a SQL query
+var ast = parser.Parse("SELECT id, name FROM users WHERE active = 1");
+
+// Reconstruct the SQL
+var reconstructor = new SqlAnywhereReconstructor();
+string sql = reconstructor.Reconstruct(ast);
+// Output: "SELECT id, name FROM users WHERE active = 1;"
+
+// Format AST for debugging
+var formatter = new SqlAnywhereFormatter();
+string formatted = formatter.Format(ast);
+```
+
+## API Reference
+
+### Core Interfaces
+
+| Interface | Description |
+|-----------|-------------|
+| `ISqlParser` | Parses SQL strings into AST |
+| `ISqlReconstructor` | Reconstructs SQL from AST |
+| `ISqlFormatter` | Formats AST for human-readable output |
+| `ISqlNode` | Base interface for all AST nodes |
+
+### Parsing
+
+```csharp
+// Create the parser
+var factory = new SqlAnywhereStatementParserFactory();
+var parser = new SqlAnywhereParser(factory);
+
+// Parse SQL into AST
+SqlStatement ast = parser.Parse("SELECT * FROM customers");
+
+// Access the statement body
+if (ast.Body is SelectStatement select)
+{
+    Console.WriteLine($"Columns: {select.SelectItems.Count}");
+    Console.WriteLine($"Has WHERE: {select.WhereClause != null}");
+}
+```
+
+### Reconstruction
+
+```csharp
+var reconstructor = new SqlAnywhereReconstructor();
+
+// Reconstruct with default dialect
+string sql = reconstructor.Reconstruct(ast);
+
+// Reconstruct with specific dialect
+string sql = reconstructor.Reconstruct(ast, SqlDialect.SqlAnywhere);
+```
+
+### Tokenization
+
+```csharp
+using SqlForge.Utils;
+
+var tokenizer = new Tokenizer("SELECT id FROM users");
+List<Token> tokens = tokenizer.Tokenize();
+
+foreach (var token in tokens)
+{
+    Console.WriteLine($"{token.Type}: {token.Value}");
+}
+// Output:
+// Keyword: SELECT
+// Identifier: id
+// Keyword: FROM
+// Identifier: users
+// EOF:
+```
+
+### AST Formatting
+
+```csharp
+var formatter = new SqlAnywhereFormatter();
+string output = formatter.Format(ast);
+
+// Output (hierarchical representation):
+// SqlStatement:
+//     Type: Select
+//     SelectStatement:
+//         SelectItems:
+//             SelectExpression:
+//                 Expression:
+//                     ColumnExpression:
+//                         Name: id
+//         FromClause:
+//             TableExpressions:
+//                 TableExpression:
+//                     TableName: users
+```
+
+## Supported SQL Features
+
+### SELECT Statements
+
+```csharp
+// Simple SELECT
+parser.Parse("SELECT id, name FROM users");
+
+// SELECT with aliases
+parser.Parse("SELECT u.id AS user_id, u.name FROM users u");
+
+// SELECT DISTINCT
+parser.Parse("SELECT DISTINCT category FROM products");
+
+// SELECT with expressions
+parser.Parse("SELECT price * quantity AS total FROM orders");
+```
+
+### WHERE Clause
+
+```csharp
+// Simple conditions
+parser.Parse("SELECT * FROM users WHERE active = 1");
+
+// Complex conditions with AND/OR
+parser.Parse("SELECT * FROM users WHERE active = 1 AND role = 'admin' OR id = 1");
+
+// IN operator
+parser.Parse("SELECT * FROM users WHERE id IN (1, 2, 3)");
+
+// EXISTS subquery
+parser.Parse("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)");
+
+// LIKE operator
+parser.Parse("SELECT * FROM users WHERE name LIKE 'John%'");
+
+// IS NULL / IS NOT NULL
+parser.Parse("SELECT * FROM users WHERE deleted_at IS NULL");
+```
+
+### JOIN Operations
+
+```csharp
+// INNER JOIN
+parser.Parse(@"
+    SELECT u.name, o.order_date
+    FROM users u
+    INNER JOIN orders o ON u.id = o.user_id
+");
+
+// LEFT OUTER JOIN
+parser.Parse(@"
+    SELECT u.name, o.order_date
+    FROM users u
+    LEFT OUTER JOIN orders o ON u.id = o.user_id
+");
+
+// Multiple JOINs
+parser.Parse(@"
+    SELECT u.name, o.order_date, p.product_name
+    FROM users u
+    INNER JOIN orders o ON u.id = o.user_id
+    INNER JOIN products p ON o.product_id = p.id
+");
+```
+
+### Subqueries
+
+```csharp
+// Subquery in SELECT
+parser.Parse(@"
+    SELECT name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count
+    FROM users u
+");
+
+// Subquery in FROM (derived table)
+parser.Parse(@"
+    SELECT * FROM (SELECT id, name FROM users WHERE active = 1) AS active_users
+");
+
+// Subquery in WHERE
+parser.Parse(@"
+    SELECT * FROM products
+    WHERE category_id IN (SELECT id FROM categories WHERE name = 'Electronics')
+");
+```
+
+### Set Operators
+
+```csharp
+// UNION
+parser.Parse("SELECT id FROM users UNION SELECT id FROM admins");
+
+// UNION ALL
+parser.Parse("SELECT id FROM users UNION ALL SELECT id FROM admins");
+
+// EXCEPT
+parser.Parse("SELECT id FROM users EXCEPT SELECT id FROM banned_users");
+
+// INTERSECT
+parser.Parse("SELECT id FROM users INTERSECT SELECT id FROM premium_users");
+```
+
+### GROUP BY, HAVING, ORDER BY
+
+```csharp
+// GROUP BY with aggregate functions
+parser.Parse(@"
+    SELECT category, COUNT(*) AS count, SUM(price) AS total
+    FROM products
+    GROUP BY category
+");
+
+// GROUP BY with HAVING
+parser.Parse(@"
+    SELECT category, COUNT(*) AS count
+    FROM products
+    GROUP BY category
+    HAVING COUNT(*) > 10
+");
+
+// ORDER BY
+parser.Parse("SELECT * FROM users ORDER BY name ASC, created_at DESC");
+```
+
+### Functions
+
+```csharp
+// Aggregate functions
+parser.Parse("SELECT COUNT(*), SUM(amount), AVG(price), MIN(date), MAX(date) FROM orders");
+
+// Scalar functions
+parser.Parse("SELECT SUBSTRING(name, 1, 10) FROM users");
+parser.Parse("SELECT GETDATE()");
+```
+
+## AST Node Types
+
+### Statement Nodes
+
+| Node | Description |
+|------|-------------|
+| `SqlStatement` | Root node containing statement type and body |
+| `SelectStatement` | SELECT statement with all clauses |
+
+### Expression Nodes
+
+| Node | Description |
+|------|-------------|
+| `ColumnExpression` | Column reference (e.g., `table.column`) |
+| `LiteralExpression` | Literal values (string, number, null) |
+| `BinaryExpression` | Binary operations (e.g., `a = b`, `a AND b`) |
+| `UnaryExpression` | Unary operations (e.g., `NOT x`, `EXISTS (...)`) |
+| `FunctionCallExpression` | Function calls (e.g., `COUNT(*)`) |
+| `SubqueryExpression` | Subquery with optional alias |
+| `SetOperatorExpression` | Set operations (UNION, EXCEPT, INTERSECT) |
+
+### Clause Nodes
+
+| Node | Description |
+|------|-------------|
+| `SelectExpression` | Column in SELECT with optional alias |
+| `FromClause` | FROM clause with table expressions |
+| `TableExpression` | Table reference with optional alias |
+| `JoinExpression` | JOIN operation with condition |
+| `WhereClause` | WHERE condition |
+| `GroupByClause` | GROUP BY expressions |
+| `HavingClause` | HAVING condition |
+| `OrderByClause` | ORDER BY items |
+| `OrderItem` | Single ORDER BY item with direction |
+
+## Enums
+
+### SqlDialect
+
+```csharp
+public enum SqlDialect
+{
+    Generic,
+    SqlAnywhere,
+    MsSqlServer,
+    MySql,
+    PostgreSql
+}
+```
+
+### TokenType
+
+```csharp
+public enum TokenType
+{
+    Keyword,
+    Identifier,
+    StringLiteral,
+    NumericLiteral,
+    Operator,
+    Parenthesis,
+    Comma,
+    Semicolon,
+    EOF
+}
+```
+
+### JoinType
+
+```csharp
+public enum JoinType
+{
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
+    Natural
+}
+```
+
+## Error Handling
+
+SqlForge throws `SqlParseException` for parsing errors:
+
+```csharp
+try
+{
+    var ast = parser.Parse("SELECT FROM");  // Invalid SQL
+}
+catch (SqlParseException ex)
+{
+    Console.WriteLine($"Parse error at position {ex.Position}: {ex.Message}");
+}
+```
+
+## Thread Safety
+
+Parser, reconstructor, and formatter instances are **not thread-safe**. Create new instances for concurrent operations or use synchronization.
+
+## Requirements
+
+- .NET Standard 2.0 or higher
+- Compatible with:
+  - .NET Framework 4.6.1+
+  - .NET Core 2.0+
+  - .NET 5/6/7/8+
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+**Syed Ikram Shah**
+- Website: [ikra.ms](https://ikra.ms)
+- GitHub: [@syedikramshah](https://github.com/syedikramshah)
+
+## Links
+
+- [GitHub Repository](https://github.com/syedikramshah/SqlForge)
+- [NuGet Package](https://www.nuget.org/packages/SqlForge/)
+- [Architecture Documentation](ARCHITECTURE.md)
+- [Changelog](CHANGELOG.md)
