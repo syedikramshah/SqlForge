@@ -47,6 +47,8 @@ namespace SqlForge.Nodes
         public GroupByClause GroupByClause { get; set; }
         public HavingClause HavingClause { get; set; }
         public OrderByClause OrderByClause { get; set; }
+        public TopClause TopClause { get; set; }
+        public OffsetFetchClause OffsetFetchClause { get; set; }
         public bool IsDistinct { get; set; }
     }
 }

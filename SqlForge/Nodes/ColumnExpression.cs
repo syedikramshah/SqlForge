@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using SqlForge.Enums;
 
 namespace SqlForge.Nodes
 {
@@ -18,6 +19,10 @@ namespace SqlForge.Nodes
 
         public bool ColumnNameQuoted { get; set; }   
         public bool TableAliasQuoted { get; set; }    
-        public bool SchemaNameQuoted { get; set; }    
+        public bool SchemaNameQuoted { get; set; }
+
+        public QuoteStyle ColumnQuoteStyle { get; set; } = QuoteStyle.None;
+        public QuoteStyle TableAliasQuoteStyle { get; set; } = QuoteStyle.None;
+        public QuoteStyle SchemaQuoteStyle { get; set; } = QuoteStyle.None;
     }
 }

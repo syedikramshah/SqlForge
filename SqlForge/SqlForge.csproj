@@ -10,23 +10,24 @@
     <!-- Assembly Info -->
     <AssemblyName>SqlForge</AssemblyName>
     <RootNamespace>SqlForge</RootNamespace>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
 
     <!-- NuGet Package Metadata -->
     <PackageId>SqlForge</PackageId>
     <Title>SqlForge</Title>
     <Authors>Syed Ikram Shah</Authors>
     <Company>ikra.ms</Company>
-    <Description>A powerful SQL parser and reconstructor library for .NET. Supports SQL Anywhere dialect with tokenization, AST generation, SQL formatting, and query reconstruction.</Description>
-    <PackageTags>sql;parser;tokenizer;ast;sql-anywhere;query;formatter</PackageTags>
+    <Description>A powerful SQL parser and reconstructor library for .NET. Supports SQL Anywhere and Microsoft SQL Server dialects with tokenization, AST generation, SQL formatting, and query reconstruction.</Description>
+    <PackageTags>sql;parser;tokenizer;ast;sql-anywhere;mssql;query;formatter</PackageTags>
     <PackageProjectUrl>https://ikra.ms/SqlForge</PackageProjectUrl>
     <RepositoryUrl>https://github.com/syedikramshah/SqlForge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Copyright>Copyright (c) 2025 Syed Ikram Shah</Copyright>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>Copyright (c) 2026 Syed Ikram Shah</Copyright>
 
     <!-- Build Settings -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -38,6 +39,7 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

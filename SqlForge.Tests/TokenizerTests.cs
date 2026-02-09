@@ -2,7 +2,9 @@
 using SqlForge.Enums;
 using SqlForge.Exceptions;
 using SqlForge.Utils;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace SqlForge.Tests
@@ -257,6 +259,76 @@ namespace SqlForge.Tests
             var identifier = tokens.Find(t => t.Type == TokenType.Identifier);
             Assert.IsNotNull(identifier, "Escaped quoted identifier not found.");
             Assert.AreEqual("Well\"ID", identifier.Value, "Escaped double-quote in identifier not handled properly.");
+        }
+
+        [TestMethod]
+        public void Tokenize_BracketedIdentifier_EscapedCorrectly()
+        {
+            var sql = "SELECT [Well]]ID] FROM [Wells]]Archive]";
+            var tokenizer = new Tokenizer(sql);
+
+            var tokens = tokenizer.Tokenize();
+
+            var firstIdentifier = tokens.First(t => t.Type == TokenType.Identifier);
+            var secondIdentifier = tokens.Where(t => t.Type == TokenType.Identifier).Skip(1).First();
+
+            Assert.AreEqual("Well]ID", firstIdentifier.Value);
+            Assert.IsTrue(firstIdentifier.IsQuoted);
+            Assert.IsTrue(firstIdentifier.IsSquareBracketed);
+            Assert.AreEqual("Wells]Archive", secondIdentifier.Value);
+            Assert.IsTrue(secondIdentifier.IsSquareBracketed);
+        }
+
+        [TestMethod]
+        public void Tokenize_BracketedIdentifier_Unterminated_ThrowsException()
+        {
+            var tokenizer = new Tokenizer("SELECT [WellName FROM Wells");
+            var ex = Assert.ThrowsException<SqlParseException>(() => tokenizer.Tokenize());
+            StringAssert.Contains(ex.Message, "Unterminated bracketed identifier");
+        }
+
+        [TestMethod]
+        public void Tokenize_UnicodePrefixStringLiteral_RecognizedAsSingleStringToken()
+        {
+            var tokenizer = new Tokenizer("SELECT N'Abc', n'XyZ'");
+            var tokens = tokenizer.Tokenize();
+
+            var stringTokens = tokens.Where(t => t.Type == TokenType.StringLiteral).ToList();
+            Assert.AreEqual(2, stringTokens.Count);
+            Assert.AreEqual("Abc", stringTokens[0].Value);
+            Assert.AreEqual("XyZ", stringTokens[1].Value);
+        }
+
+        [TestMethod]
+        public void Tokenize_QuotedIdentifier_TracksQuoteStyle()
+        {
+            var tokenizer = new Tokenizer("SELECT \"A\", [B] FROM T");
+            var tokens = tokenizer.Tokenize();
+
+            var quotedIdentifiers = tokens.Where(t => t.Type == TokenType.Identifier && t.IsQuoted).ToList();
+            Assert.AreEqual(2, quotedIdentifiers.Count);
+            Assert.IsTrue(quotedIdentifiers.Any(t => t.Value == "A" && t.IsDoubleQuoted));
+            Assert.IsTrue(quotedIdentifiers.Any(t => t.Value == "B" && t.IsSquareBracketed));
+        }
+
+        [TestMethod]
+        public void Tokenize_DoesNotWriteDebugOutput()
+        {
+            var originalOut = Console.Out;
+            var writer = new StringWriter();
+
+            try
+            {
+                Console.SetOut(writer);
+                var tokenizer = new Tokenizer("SELECT 1");
+                tokenizer.Tokenize();
+                Assert.AreEqual(string.Empty, writer.ToString());
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                writer.Dispose();
+            }
         }
     }
 

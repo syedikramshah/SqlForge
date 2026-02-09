@@ -22,7 +22,10 @@ namespace SqlForge.Utils
             "DISTINCT", "TOP", "UNION", "ALL", "EXCEPT", "INTERSECT", "IN", "NOT", "NULL", "IS",
             "COUNT", "SUM", "AVG", "MIN", "MAX", "SUBSTRING", "GETDATE",
             "CASE", "WHEN", "THEN", "ELSE", "END", "EXISTS", "OUTER",
-            "LIKE", "ASC", "DESC"
+            "LIKE", "ASC", "DESC",
+            "WITH", "OVER", "PARTITION", "OFFSET", "FETCH", "ROWS", "ROW", "ONLY",
+            "APPLY", "CROSS", "PERCENT", "TIES", "RANGE", "GROUPS", "NEXT", "FIRST",
+            "BETWEEN", "FOLLOWING", "PRECEDING", "UNBOUNDED", "CURRENT"
         };
 
         private static readonly Dictionary<string, TokenType> Operators = new Dictionary<string, TokenType>(StringComparer.Ordinal)
@@ -112,6 +115,17 @@ namespace SqlForge.Utils
                 }
                 if (matchedOperator) continue;
 
+                // N'...' Unicode string literal (T-SQL)
+                if ((currentChar == 'N' || currentChar == 'n') &&
+                    _position + 1 < _sql.Length &&
+                    _sql[_position + 1] == '\'')
+                {
+                    int start = _position;
+                    _position++; // consume N prefix
+                    tokens.Add(new Token(TokenType.StringLiteral, ReadSingleQuotedLiteral(start), start, _position - start, isQuoted: false, isUnicodeString: true));
+                    continue;
+                }
+
                 // Identifiers and keywords (unquoted)
                 if (char.IsLetter(currentChar) || currentChar == '_')
                 {
@@ -120,7 +134,7 @@ namespace SqlForge.Utils
                         _position++;
                     string value = _sql.Substring(start, _position - start);
                     tokens.Add(new Token(
-                        Keywords.Contains(value.ToUpperInvariant()) ? TokenType.Keyword : TokenType.Identifier,
+                        Keywords.Contains(value) ? TokenType.Keyword : TokenType.Identifier,
                         value, start, value.Length));
                     continue;
                 }
@@ -146,37 +160,7 @@ namespace SqlForge.Utils
                 if (currentChar == '\'')
                 {
                     int start = _position;
-                    _position++;
-                    var sb = new StringBuilder();
-
-                    bool closed = false;
-                    while (_position < _sql.Length)
-                    {
-                        if (_sql[_position] == '\'')
-                        {
-                            if (_position + 1 < _sql.Length && _sql[_position + 1] == '\'')
-                            {
-                                sb.Append('\''); // Escaped single quote
-                                _position += 2;
-                            }
-                            else
-                            {
-                                _position++; // Closing quote
-                                closed = true;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            sb.Append(_sql[_position]);
-                            _position++;
-                        }
-                    }
-
-                    if (!closed)
-                        throw new SqlParseException($"Unterminated string literal starting at {start}", start);
-
-                    tokens.Add(new Token(TokenType.StringLiteral, sb.ToString(), start, _position - start));
+                    tokens.Add(new Token(TokenType.StringLiteral, ReadSingleQuotedLiteral(start), start, _position - start));
                     continue;
                 }
 
@@ -209,7 +193,45 @@ namespace SqlForge.Utils
                         }
                     }
 
-                    tokens.Add(new Token(TokenType.Identifier, sb.ToString(), start, _position - start, isQuoted: true));
+                    tokens.Add(new Token(TokenType.Identifier, sb.ToString(), start, _position - start, QuoteStyle.DoubleQuote));
+                    continue;
+                }
+
+                // Square bracket delimited identifier: [Name]]With]]Bracket]
+                if (currentChar == '[')
+                {
+                    int start = _position;
+                    _position++;
+                    var sb = new StringBuilder();
+                    bool closed = false;
+
+                    while (_position < _sql.Length)
+                    {
+                        if (_sql[_position] == ']')
+                        {
+                            if (_position + 1 < _sql.Length && _sql[_position + 1] == ']')
+                            {
+                                sb.Append(']');
+                                _position += 2;
+                            }
+                            else
+                            {
+                                _position++;
+                                closed = true;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            sb.Append(_sql[_position]);
+                            _position++;
+                        }
+                    }
+
+                    if (!closed)
+                        throw new SqlParseException($"Unterminated bracketed identifier starting at {start}", start);
+
+                    tokens.Add(new Token(TokenType.Identifier, sb.ToString(), start, _position - start, QuoteStyle.SquareBracket));
                     continue;
                 }
 
@@ -219,11 +241,42 @@ namespace SqlForge.Utils
 
             tokens.Add(new Token(TokenType.EOF, string.Empty, _position, 0));
 
-            foreach (var token in tokens)
-                Console.WriteLine($"{token.Type}: {token.Value}");
-
-
             return tokens;
+        }
+
+        private string ReadSingleQuotedLiteral(int start)
+        {
+            _position++; // consume opening single quote
+            var sb = new StringBuilder();
+            bool closed = false;
+
+            while (_position < _sql.Length)
+            {
+                if (_sql[_position] == '\'')
+                {
+                    if (_position + 1 < _sql.Length && _sql[_position + 1] == '\'')
+                    {
+                        sb.Append('\'');
+                        _position += 2;
+                    }
+                    else
+                    {
+                        _position++;
+                        closed = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    sb.Append(_sql[_position]);
+                    _position++;
+                }
+            }
+
+            if (!closed)
+                throw new SqlParseException($"Unterminated string literal starting at {start}", start);
+
+            return sb.ToString();
         }
 
     }

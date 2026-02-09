@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using SqlForge;
+using SqlForge.Enums;
 
 namespace SqlForge.Nodes
 {
@@ -17,9 +18,13 @@ namespace SqlForge.Nodes
         public string SchemaName { get; set; }
         public string Alias { get; set; }
         public SubqueryExpression Subquery { get; set; }
+        public List<TableHint> TableHints { get; set; } = new List<TableHint>();
         public bool SchemaNameQuoted { get; set; }
         public bool TableNameQuoted { get; set; }
         public bool AliasQuoted { get; set; }
+        public QuoteStyle SchemaQuoteStyle { get; set; } = QuoteStyle.None;
+        public QuoteStyle TableQuoteStyle { get; set; } = QuoteStyle.None;
+        public QuoteStyle AliasQuoteStyle { get; set; } = QuoteStyle.None;
         public bool HasExplicitAs { get; set; }
     }
 }

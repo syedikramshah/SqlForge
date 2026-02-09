@@ -16,5 +16,6 @@ namespace SqlForge.Nodes
     {
         public StatementType Type { get; set; }
         public ISqlNode Body { get; set; }
+        public WithClause WithClause { get; set; }
     }
 }

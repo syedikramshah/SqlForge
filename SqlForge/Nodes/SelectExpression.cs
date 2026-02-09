@@ -1,4 +1,5 @@
-﻿using SqlForge.Interfaces;
+using SqlForge.Enums;
+using SqlForge.Interfaces;
 
 namespace SqlForge.Nodes
 {
@@ -10,6 +11,7 @@ namespace SqlForge.Nodes
         public ISqlNode Expression { get; set; }
         public string Alias { get; set; }
         public bool AliasQuoted { get; set; }
+        public QuoteStyle AliasQuoteStyle { get; set; } = QuoteStyle.None;
         public bool HasExplicitAs { get; set; }
     }
 }

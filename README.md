@@ -12,8 +12,9 @@ A powerful SQL parser, AST generator, and query reconstructor library for .NET. 
 - **AST Generation** - Parse SQL into a traversable Abstract Syntax Tree
 - **SQL Reconstruction** - Rebuild valid SQL from AST nodes
 - **SQL Formatting** - Pretty-print AST for debugging and visualization
-- **Dialect Support** - Designed for SQL Anywhere with extensible architecture for other dialects
-- **Complex Query Support** - Handles subqueries, JOINs, set operators, and nested expressions
+- **Dialect Support** - SQL Anywhere and Microsoft SQL Server parsers, reconstructors, and formatters
+- **Complex Query Support** - Handles subqueries, JOINs, set operators, window functions, and nested expressions
+- **MSSQL Extensions** - TOP, OFFSET/FETCH, CTEs, APPLY, table hints, and window frames
 
 ## Installation
 
@@ -32,7 +33,7 @@ dotnet add package SqlForge
 ### PackageReference
 
 ```xml
-<PackageReference Include="SqlForge" Version="1.0.0" />
+<PackageReference Include="SqlForge" Version="1.1.0" />
 ```
 
 ## Quick Start
@@ -57,6 +58,23 @@ string sql = reconstructor.Reconstruct(ast);
 // Format AST for debugging
 var formatter = new SqlAnywhereFormatter();
 string formatted = formatter.Format(ast);
+```
+
+```csharp
+using SqlForge.Parsers;
+using SqlForge.Reconstructors;
+using SqlForge.Formatters;
+
+// MSSQL parser and reconstructor
+var msFactory = new MsSqlServerStatementParserFactory();
+var msParser = new MsSqlServerParser(msFactory);
+var msAst = msParser.Parse("SELECT TOP 10 WITH TIES id FROM users ORDER BY id DESC");
+
+var msReconstructor = new MsSqlServerReconstructor();
+string msSql = msReconstructor.Reconstruct(msAst);
+
+var msFormatter = new MsSqlServerFormatter();
+string msFormatted = msFormatter.Format(msAst);
 ```
 
 ## API Reference
@@ -88,6 +106,21 @@ if (ast.Body is SelectStatement select)
 }
 ```
 
+```csharp
+// Factory-based creation
+var parserAny = SqlForgeFactory.CreateParser(SqlDialect.SqlAnywhere);
+var parserMs = SqlForgeFactory.CreateParser(SqlDialect.MsSqlServer);
+
+var reconAny = SqlForgeFactory.CreateReconstructor(SqlDialect.SqlAnywhere);
+var reconMs = SqlForgeFactory.CreateReconstructor(SqlDialect.MsSqlServer);
+
+var fmtAny = SqlForgeFactory.CreateFormatter(SqlDialect.SqlAnywhere);
+var fmtMs = SqlForgeFactory.CreateFormatter(SqlDialect.MsSqlServer);
+
+var ast1 = parserAny.Parse("SELECT id FROM users");
+var ast2 = parserMs.Parse("SELECT TOP 5 id FROM users ORDER BY id DESC");
+```
+
 ### Reconstruction
 
 ```csharp
@@ -99,6 +132,8 @@ string sql = reconstructor.Reconstruct(ast);
 // Reconstruct with specific dialect
 string sql = reconstructor.Reconstruct(ast, SqlDialect.SqlAnywhere);
 ```
+
+Note: For Microsoft SQL Server, when an identifier was parsed as quoted but the original quote style is unknown, the reconstructor defaults to square brackets (`[name]`) to avoid reliance on `QUOTED_IDENTIFIER`.
 
 ### Tokenization
 
@@ -142,6 +177,8 @@ string output = formatter.Format(ast);
 ```
 
 ## Supported SQL Features
+
+Full examples for each dialect are in `examples.md`.
 
 ### SELECT Statements
 
@@ -205,6 +242,18 @@ parser.Parse(@"
     INNER JOIN orders o ON u.id = o.user_id
     INNER JOIN products p ON o.product_id = p.id
 ");
+
+// APPLY (MSSQL)
+parser.Parse(@"
+    SELECT u.id, x.last_order_id
+    FROM users u
+    CROSS APPLY (
+        SELECT TOP 1 o.id AS last_order_id
+        FROM orders o
+        WHERE o.user_id = u.id
+        ORDER BY o.id DESC
+    ) x
+");
 ```
 
 ### Subqueries
@@ -264,6 +313,9 @@ parser.Parse(@"
 
 // ORDER BY
 parser.Parse("SELECT * FROM users ORDER BY name ASC, created_at DESC");
+
+// OFFSET/FETCH (MSSQL)
+parser.Parse("SELECT id FROM users ORDER BY id OFFSET 10 ROWS FETCH NEXT 20 ROWS ONLY");
 ```
 
 ### Functions
@@ -275,6 +327,10 @@ parser.Parse("SELECT COUNT(*), SUM(amount), AVG(price), MIN(date), MAX(date) FRO
 // Scalar functions
 parser.Parse("SELECT SUBSTRING(name, 1, 10) FROM users");
 parser.Parse("SELECT GETDATE()");
+
+// Window functions (MSSQL)
+parser.Parse("SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) AS rn FROM employees");
+parser.Parse("SELECT SUM(amount) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM payments");
 ```
 
 ## AST Node Types
@@ -349,12 +405,26 @@ public enum TokenType
 ```csharp
 public enum JoinType
 {
+    Unknown,
     Inner,
     Left,
     Right,
     Full,
     Cross,
-    Natural
+    Natural,
+    CrossApply,
+    OuterApply
+}
+```
+
+### QuoteStyle
+
+```csharp
+public enum QuoteStyle
+{
+    None,
+    DoubleQuotes,
+    SquareBrackets
 }
 ```
 
@@ -411,3 +481,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [NuGet Package](https://www.nuget.org/packages/SqlForge/)
 - [Architecture Documentation](ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
+- [Examples](examples.md)

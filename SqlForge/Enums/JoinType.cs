@@ -19,6 +19,8 @@ namespace SqlForge.Enums
         Right,
         Full,
         Cross,
-        Natural
+        Natural,
+        CrossApply,
+        OuterApply
     }
 }

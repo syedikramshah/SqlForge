@@ -15,5 +15,6 @@ namespace SqlForge.Nodes
     {
         public string Value { get; set; }
         public LiteralType Type { get; set; }
+        public bool IsUnicode { get; set; }
     }
 }
