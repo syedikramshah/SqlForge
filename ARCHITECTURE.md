@@ -64,7 +64,7 @@ SqlForge is a SQL parsing library that transforms SQL query strings into Abstrac
 
 ### Phase 1: Tokenization
 
-The `Tokenizer` class performs lexical analysis, converting raw SQL text into a stream of tokens.
+The `Tokenizer` class performs lexical analysis, converting raw SQL text into a stream of tokens. Keyword classification is dialect-aware, so token meaning can vary safely by SQL dialect.
 
 ```
 SQL: "SELECT id, name FROM users WHERE active = 1"
@@ -98,6 +98,7 @@ Tokens:
 - Quoted identifiers: `"Column Name"` → Identifier with `IsQuoted=true`
 - Escaped quotes: `'It''s'` → StringLiteral with value `It's`
 - Comments: `-- comment` and `/* comment */` are skipped
+- Dialect keyword disambiguation (for example, `MERGE` is a keyword in MS SQL Server but an identifier in SQL Anywhere)
 
 ### Phase 2: Parsing
 
@@ -160,6 +161,7 @@ public class Tokenizer
     private readonly string _sql;
     private int _position;
 
+    public Tokenizer(string sql, SqlDialect dialect = SqlDialect.Generic);
     public List<Token> Tokenize();
 }
 ```
@@ -167,9 +169,14 @@ public class Tokenizer
 **Responsibilities:**
 - Character-by-character scanning
 - Token classification
+- Dialect-aware keyword resolution via `DialectKeywordRegistry`
 - Handling of string escapes and quoted identifiers
 - Comment removal
 - Error reporting for malformed input
+
+### Dialect Keyword Registry (`SqlForge.Utils.DialectKeywordRegistry`)
+
+The registry centralizes SQL keywords and allows dialect-specific additions and exclusions. It is used in both tokenizer classification and parser keyword checks to reduce keyword collisions across dialects.
 
 ### Parser Context (`SqlForge.Parsers.ParserContext`)
 
@@ -187,6 +194,7 @@ public class ParserContext : IParserContext
 - Token stream navigation
 - Lookahead support
 - Token matching and consumption
+- Dialect-aware keyword checks in `IsKeyword`, `MatchToken`, and `ConsumeToken`
 - Position tracking for error messages
 
 ### Statement Parser Factory (`SqlForge.Parsers.SqlAnywhereStatementParserFactory`)
@@ -476,6 +484,42 @@ SqlForge/
 └── SqlForge.sln
 ```
 
+## Dialect Parity Notes
+
+SqlForge targets practical parity across supported dialects while keeping a shared AST. The notes below summarize what is implemented for SQL Anywhere and MS SQL Server and highlight remaining gaps.
+
+### SQL Anywhere
+
+**Implemented:**
+- SELECT pipeline (joins, grouping, ordering)
+- DML statements: INSERT, UPDATE, DELETE
+- DDL statements: CREATE TABLE, DROP TABLE, ALTER TABLE
+- Column options: NULL/NOT NULL, DEFAULT, PRIMARY KEY, UNIQUE, IDENTITY
+- Table constraints: PRIMARY KEY, UNIQUE
+
+**Remaining gaps (not yet modeled):**
+- CREATE INDEX / DROP INDEX
+- FOREIGN KEY and CHECK constraints
+- Computed columns and persisted attributes
+- Table-level options and storage attributes
+- Advanced locking clauses
+
+### MS SQL Server
+
+**Implemented:**
+- SELECT pipeline (including TOP and OFFSET/FETCH)
+- DML statements: INSERT, UPDATE, DELETE
+- DDL statements: CREATE TABLE, DROP TABLE, ALTER TABLE
+- Column options: NULL/NOT NULL, DEFAULT, PRIMARY KEY, UNIQUE, IDENTITY
+- Table constraints: PRIMARY KEY, UNIQUE
+
+**Remaining gaps (not yet modeled):**
+- MERGE and OUTPUT clauses
+- CREATE/ALTER/DROP INDEX
+- FOREIGN KEY and CHECK constraints, computed columns
+- Filegroup/table options, partitioning, advanced index options
+- RENAME support (SQL Server typically uses sp_rename)
+
 ## Data Flow Example
 
 Here's a complete trace of parsing `SELECT id FROM users`:
@@ -523,9 +567,4 @@ Here's a complete trace of parsing `SELECT id FROM users`:
 
 ## Future Considerations
 
-Planned enhancements noted in the codebase:
-
-1. **TOP/LIMIT clause support** - For SQL Server and MySQL style row limiting
-2. **WITH clause (CTEs)** - Common Table Expressions support
-3. **INSERT/UPDATE/DELETE statements** - DML statement support
-4. **Additional dialects** - MySQL, PostgreSQL, SQL Server specific syntax
+Planned enhancements and known limitations are tracked in [LIMITATIONS_AND_FUTURE_WORK.md](LIMITATIONS_AND_FUTURE_WORK.md).

@@ -22,7 +22,8 @@ namespace SqlForge.Tests
             IExpressionParser expressionParser = new SqlAnywhereExpressionParser(statementParserFactoryHolder);
             IStatementParser selectStatementParser = new SelectStatementParser(expressionParser, statementParserFactoryHolder);
             IStatementParserFactory actualStatementParserFactory = new SqlAnywhereStatementParserFactory(
-                (SelectStatementParser)selectStatementParser
+                (SelectStatementParser)selectStatementParser,
+                expressionParser
             );
             statementParserFactoryHolder.SetActualFactory(actualStatementParserFactory);
             _parser = new SqlAnywhereParser(actualStatementParserFactory);

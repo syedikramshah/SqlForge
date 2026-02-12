@@ -1,4 +1,5 @@
 using System.Text;
+using SqlForge.Enums;
 using SqlForge.Interfaces;
 using SqlForge.Nodes;
 
@@ -66,6 +67,7 @@ namespace SqlForge.Formatters
                     if (select.HavingClause != null) FormatNode(select.HavingClause, sb, indentLevel + 1);
                     if (select.OrderByClause != null) FormatNode(select.OrderByClause, sb, indentLevel + 1);
                     if (select.OffsetFetchClause != null) FormatNode(select.OffsetFetchClause, sb, indentLevel + 1);
+                    if (select.LimitClause != null) FormatNode(select.LimitClause, sb, indentLevel + 1);
                     break;
 
                 case TopClause top:
@@ -86,6 +88,19 @@ namespace SqlForge.Formatters
                     }
                     break;
 
+                case LimitClause limit:
+                    if (limit.OffsetExpression != null)
+                    {
+                        sb.AppendLine($"{indent}    OffsetExpression:");
+                        FormatNode(limit.OffsetExpression, sb, indentLevel + 2);
+                    }
+                    if (limit.CountExpression != null)
+                    {
+                        sb.AppendLine($"{indent}    CountExpression:");
+                        FormatNode(limit.CountExpression, sb, indentLevel + 2);
+                    }
+                    break;
+
                 case TableHint hint:
                     sb.AppendLine($"{indent}    HintName: {hint.HintName}");
                     if (hint.Parameters.Count > 0)
@@ -99,12 +114,69 @@ namespace SqlForge.Formatters
                     sb.AppendLine($"{indent}    FunctionName: {window.FunctionName}");
                     break;
 
+                case SelectExpression selectExpr:
+                    sb.AppendLine($"{indent}    Expression:");
+                    FormatNode(selectExpr.Expression, sb, indentLevel + 2);
+                    if (!string.IsNullOrEmpty(selectExpr.Alias))
+                    {
+                        var alias = QuoteIdentifier(selectExpr.Alias, selectExpr.AliasQuoteStyle, selectExpr.AliasQuoted);
+                        sb.AppendLine($"{indent}    Alias: {alias}");
+                    }
+                    break;
+
+                case ColumnExpression col:
+                    var qualifiedName = "";
+                    if (!string.IsNullOrEmpty(col.SchemaName))
+                        qualifiedName += QuoteIdentifier(col.SchemaName, col.SchemaQuoteStyle, col.SchemaNameQuoted) + ".";
+                    if (!string.IsNullOrEmpty(col.TableAlias))
+                        qualifiedName += QuoteIdentifier(col.TableAlias, col.TableAliasQuoteStyle, col.TableAliasQuoted) + ".";
+                    qualifiedName += QuoteIdentifier(col.ColumnName, col.ColumnQuoteStyle, col.ColumnNameQuoted);
+                    sb.AppendLine($"{indent}    Name: {qualifiedName}");
+                    break;
+
+                case TableExpression table:
+                    var tableName = "";
+                    if (!string.IsNullOrEmpty(table.SchemaName))
+                        tableName += QuoteIdentifier(table.SchemaName, table.SchemaQuoteStyle, table.SchemaNameQuoted) + ".";
+                    tableName += QuoteIdentifier(table.TableName, table.TableQuoteStyle, table.TableNameQuoted);
+
+                    if (!string.IsNullOrEmpty(table.Alias))
+                    {
+                        var alias = QuoteIdentifier(table.Alias, table.AliasQuoteStyle, table.AliasQuoted);
+                        tableName += $" (Alias: {alias})";
+                    }
+
+                    sb.AppendLine($"{indent}    TableName: {tableName}");
+                    if (table.Subquery != null)
+                        FormatNode(table.Subquery, sb, indentLevel + 1);
+                    break;
+
                 default:
                     // Reuse SQL Anywhere formatting for all shared node types.
                     var fallback = new SqlAnywhereFormatter().Format(node);
                     sb.Append(fallback);
                     break;
             }
+        }
+
+        private static string QuoteIdentifier(string identifier, QuoteStyle quoteStyle, bool quotedFallback)
+        {
+            if (quoteStyle == QuoteStyle.None && quotedFallback)
+            {
+                quoteStyle = QuoteStyle.SquareBracket;
+            }
+
+            if (quoteStyle == QuoteStyle.SquareBracket)
+            {
+                return "[" + identifier.Replace("]", "]]" ) + "]";
+            }
+
+            if (quoteStyle == QuoteStyle.DoubleQuote)
+            {
+                return "\"" + identifier.Replace("\"", "\"\"") + "\"";
+            }
+
+            return identifier;
         }
     }
 }

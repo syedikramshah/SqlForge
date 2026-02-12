@@ -20,6 +20,7 @@ namespace SqlForge.Utils
         public QuoteStyle QuoteStyle { get; }
         public bool IsDoubleQuoted => QuoteStyle == QuoteStyle.DoubleQuote;
         public bool IsSquareBracketed => QuoteStyle == QuoteStyle.SquareBracket;
+        public bool IsBacktickQuoted => QuoteStyle == QuoteStyle.Backtick;
         public bool IsUnicodeString { get; }
 
         public Token(TokenType type, string value, int startIndex = -1, int length = -1, bool isQuoted = false, bool isUnicodeString = false)

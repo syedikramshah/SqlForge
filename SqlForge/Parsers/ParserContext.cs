@@ -13,11 +13,13 @@ namespace SqlForge.Parsers
     public class ParserContext : IParserContext
     {
         private readonly List<Token> _tokens;
+        private readonly SqlDialect _dialect;
         private int _currentTokenIndex;
 
-        public ParserContext(List<Token> tokens)
+        public ParserContext(List<Token> tokens, SqlDialect dialect = SqlDialect.Generic)
         {
             _tokens = tokens;
+            _dialect = dialect;
             _currentTokenIndex = 0;
         }
 
@@ -53,11 +55,24 @@ namespace SqlForge.Parsers
         public Token ConsumeToken(string expectedValue, TokenType expectedType = TokenType.Keyword) // Implemented
         {
             var token = ConsumeToken();
-            bool isMatch = expectedType == TokenType.Keyword
+            bool isValueMatch = expectedType == TokenType.Keyword
                 ? token.Value.Equals(expectedValue, StringComparison.OrdinalIgnoreCase)
                 : token.Value.Equals(expectedValue, StringComparison.Ordinal);
 
-            if (!isMatch || token.Type != expectedType)
+            bool isTypeMatch;
+            if (expectedType == TokenType.Keyword)
+            {
+                isTypeMatch =
+                    (token.Type == TokenType.Keyword || token.Type == TokenType.Identifier) &&
+                    !token.IsQuoted &&
+                    DialectKeywordRegistry.IsKeyword(token.Value, _dialect);
+            }
+            else
+            {
+                isTypeMatch = token.Type == expectedType;
+            }
+
+            if (!isValueMatch || !isTypeMatch)
             {
                 throw new SqlParseException($"Expected '{expectedValue}' ({expectedType}), got '{token.Value}' ({token.Type})", token.StartIndex);
             }
@@ -70,11 +85,26 @@ namespace SqlForge.Parsers
         /// </summary>
         public bool MatchToken(string value, TokenType type = TokenType.Keyword)
         {
-            if (PeekToken().Type == type)
+            var token = PeekToken();
+
+            bool typeMatches;
+            if (type == TokenType.Keyword)
+            {
+                typeMatches =
+                    (token.Type == TokenType.Keyword || token.Type == TokenType.Identifier) &&
+                    !token.IsQuoted &&
+                    DialectKeywordRegistry.IsKeyword(token.Value, _dialect);
+            }
+            else
+            {
+                typeMatches = token.Type == type;
+            }
+
+            if (typeMatches)
             {
                 bool isMatch = type == TokenType.Keyword
-                    ? PeekToken().Value.Equals(value, StringComparison.OrdinalIgnoreCase)
-                    : PeekToken().Value.Equals(value, StringComparison.Ordinal);
+                    ? token.Value.Equals(value, StringComparison.OrdinalIgnoreCase)
+                    : token.Value.Equals(value, StringComparison.Ordinal);
 
                 if (isMatch)
                 {
@@ -91,7 +121,10 @@ namespace SqlForge.Parsers
         public bool IsKeyword(string keyword)
         {
             var token = PeekToken();
-            return token.Type == TokenType.Keyword && token.Value.Equals(keyword, StringComparison.OrdinalIgnoreCase);
+            return (token.Type == TokenType.Keyword || token.Type == TokenType.Identifier) &&
+                   !token.IsQuoted &&
+                   token.Value.Equals(keyword, StringComparison.OrdinalIgnoreCase) &&
+                   DialectKeywordRegistry.IsKeyword(token.Value, _dialect);
         }
     }
 }

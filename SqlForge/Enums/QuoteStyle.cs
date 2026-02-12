@@ -7,6 +7,7 @@ namespace SqlForge.Enums
     {
         None = 0,
         DoubleQuote = 1,
-        SquareBracket = 2
+        SquareBracket = 2,
+        Backtick = 3
     }
 }

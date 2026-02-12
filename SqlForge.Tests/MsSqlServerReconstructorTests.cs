@@ -20,7 +20,7 @@ namespace SqlForge.Tests
             var factoryHolder = new StatementParserFactoryHolder();
             IExpressionParser expressionParser = new MsSqlExpressionParser(factoryHolder);
             var selectParser = new MsSqlSelectStatementParser(expressionParser, factoryHolder);
-            IStatementParserFactory factory = new MsSqlServerStatementParserFactory(selectParser);
+            IStatementParserFactory factory = new MsSqlServerStatementParserFactory(selectParser, expressionParser);
             factoryHolder.SetActualFactory(factory);
             _parser = new MsSqlServerParser(factory);
             _reconstructor = new MsSqlServerReconstructor();
@@ -160,6 +160,32 @@ namespace SqlForge.Tests
         public void RoundTrip_CrossApply_SubqueryAlias_IsStable()
         {
             var sql = "SELECT u.id, x.last_order_id FROM users u CROSS APPLY (SELECT TOP 1 o.id AS last_order_id FROM orders o WHERE o.user_id = u.id ORDER BY o.id DESC) x;";
+            var ast1 = _parser.Parse(sql);
+            var recon1 = _reconstructor.Reconstruct(ast1, SqlDialect.MsSqlServer);
+            var ast2 = _parser.Parse(recon1, SqlDialect.MsSqlServer);
+            var recon2 = _reconstructor.Reconstruct(ast2, SqlDialect.MsSqlServer);
+
+            Assert.AreEqual(Normalize(recon1), Normalize(recon2));
+        }
+
+        [TestMethod]
+        public void RoundTrip_CreateTable_WithConstraints_IsStable()
+        {
+            var sql = "CREATE TABLE [dbo].[Users] (Id INT IDENTITY(1,1) PRIMARY KEY, ParentId INT, Name NVARCHAR(50) NOT NULL, " +
+                      "CONSTRAINT FK_Users_Parent FOREIGN KEY (ParentId) REFERENCES [dbo].[Users](Id) ON DELETE CASCADE, " +
+                      "CHECK (Id > 0));";
+            var ast1 = _parser.Parse(sql);
+            var recon1 = _reconstructor.Reconstruct(ast1, SqlDialect.MsSqlServer);
+            var ast2 = _parser.Parse(recon1, SqlDialect.MsSqlServer);
+            var recon2 = _reconstructor.Reconstruct(ast2, SqlDialect.MsSqlServer);
+
+            Assert.AreEqual(Normalize(recon1), Normalize(recon2));
+        }
+
+        [TestMethod]
+        public void RoundTrip_CreateIndex_WithInclude_IsStable()
+        {
+            var sql = "CREATE UNIQUE INDEX [IX_Users_Name] ON [dbo].[Users] (Name DESC) INCLUDE (ParentId);";
             var ast1 = _parser.Parse(sql);
             var recon1 = _reconstructor.Reconstruct(ast1, SqlDialect.MsSqlServer);
             var ast2 = _parser.Parse(recon1, SqlDialect.MsSqlServer);

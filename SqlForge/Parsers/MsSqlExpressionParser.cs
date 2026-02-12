@@ -95,53 +95,11 @@ namespace SqlForge.Parsers
             }
             else if (context.IsKeyword("IN"))
             {
-                context.ConsumeToken("IN");
-                context.ConsumeToken("(", TokenType.Parenthesis);
-
-                ISqlNode inRight;
-                if (context.IsKeyword("SELECT") ||
-                    (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
-                {
-                    inRight = new SubqueryExpression { SubqueryStatement = _statementParserFactory.ParseStatement(context) };
-                }
-                else
-                {
-                    var inArguments = new List<ISqlNode>();
-                    do
-                    {
-                        inArguments.Add(Parse(context));
-                    } while (context.MatchToken(",", TokenType.Comma));
-                    inRight = new FunctionCallExpression { FunctionName = "IN_LIST", Arguments = inArguments };
-                }
-
-                context.ConsumeToken(")", TokenType.Parenthesis);
-                left = new BinaryExpression { Left = left, Operator = "IN", Right = inRight };
+                left = ParseInExpression(context, left, false);
             }
             else if (context.IsKeyword("NOT") && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("IN", StringComparison.OrdinalIgnoreCase))
             {
-                context.ConsumeToken("NOT");
-                context.ConsumeToken("IN");
-                context.ConsumeToken("(", TokenType.Parenthesis);
-
-                ISqlNode inRight;
-                if (context.IsKeyword("SELECT") ||
-                    (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
-                {
-                    inRight = new SubqueryExpression { SubqueryStatement = _statementParserFactory.ParseStatement(context) };
-                }
-                else
-                {
-                    var inArguments = new List<ISqlNode>();
-                    do
-                    {
-                        inArguments.Add(Parse(context));
-                    } while (context.MatchToken(",", TokenType.Comma));
-                    inRight = new FunctionCallExpression { FunctionName = "IN_LIST", Arguments = inArguments };
-                }
-
-                context.ConsumeToken(")", TokenType.Parenthesis);
-                var inExpression = new BinaryExpression { Left = left, Operator = "IN", Right = inRight };
-                left = new UnaryExpression { Operator = "NOT", Expression = inExpression };
+                left = ParseInExpression(context, left, true);
             }
 
             return left;
@@ -471,6 +429,39 @@ namespace SqlForge.Parsers
                    keyword.Equals("LEAD", StringComparison.OrdinalIgnoreCase) ||
                    keyword.Equals("FIRST_VALUE", StringComparison.OrdinalIgnoreCase) ||
                    keyword.Equals("LAST_VALUE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private InExpression ParseInExpression(IParserContext context, ISqlNode left, bool isNegated)
+        {
+            if (isNegated)
+            {
+                context.ConsumeToken("NOT");
+            }
+
+            context.ConsumeToken("IN");
+            context.ConsumeToken("(", TokenType.Parenthesis);
+
+            var inExpression = new InExpression
+            {
+                Expression = left,
+                IsNegated = isNegated
+            };
+
+            if (context.IsKeyword("SELECT") ||
+                (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
+            {
+                inExpression.Subquery = _statementParserFactory.ParseStatement(context);
+            }
+            else
+            {
+                do
+                {
+                    inExpression.Values.Add(ParseAdditiveExpression(context));
+                } while (context.MatchToken(",", TokenType.Comma));
+            }
+
+            context.ConsumeToken(")", TokenType.Parenthesis);
+            return inExpression;
         }
     }
 }

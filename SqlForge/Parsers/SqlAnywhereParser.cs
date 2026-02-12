@@ -25,7 +25,9 @@ namespace SqlForge.Parsers
 
         public override SqlStatement Parse(string sql, SqlDialect dialect = SqlDialect.SqlAnywhere)
         {
-            var tokenizer = new Tokenizer(sql);
+            var effectiveDialect = dialect == SqlDialect.Generic ? SqlDialect.SqlAnywhere : dialect;
+
+            var tokenizer = new Tokenizer(sql, effectiveDialect);
             var tokens = tokenizer.Tokenize();
 
             // Corrected condition: throw exception only if the token list is truly empty,
@@ -35,7 +37,7 @@ namespace SqlForge.Parsers
                 throw new SqlParseException("Empty or invalid SQL string.");
             }
 
-            var context = new ParserContext(tokens);
+            var context = new ParserContext(tokens, effectiveDialect);
 
             var statement = ParseTopLevelStatement(context);
 

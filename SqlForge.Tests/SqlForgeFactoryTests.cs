@@ -30,5 +30,27 @@ namespace SqlForge.Tests
             Assert.AreEqual(StatementType.Select, ast.Type);
             Assert.IsInstanceOfType(ast.Body, typeof(SelectStatement));
         }
+
+        [TestMethod]
+        public void Factory_CreatesMySqlComponents()
+        {
+            var parser = SqlForgeFactory.CreateParser(SqlDialect.MySql);
+            var reconstructor = SqlForgeFactory.CreateReconstructor(SqlDialect.MySql);
+            var formatter = SqlForgeFactory.CreateFormatter(SqlDialect.MySql);
+
+            Assert.IsNotNull(parser);
+            Assert.IsNotNull(reconstructor);
+            Assert.IsNotNull(formatter);
+            Assert.IsInstanceOfType(reconstructor, typeof(MySqlReconstructor));
+        }
+
+        [TestMethod]
+        public void Factory_MySqlParser_ParsesBasicSelect()
+        {
+            ISqlParser parser = SqlForgeFactory.CreateParser(SqlDialect.MySql);
+            var ast = parser.Parse("SELECT id FROM users LIMIT 1;");
+            Assert.AreEqual(StatementType.Select, ast.Type);
+            Assert.IsInstanceOfType(ast.Body, typeof(SelectStatement));
+        }
     }
 }
