@@ -66,8 +66,7 @@ Console.WriteLine(literal.IsUnicode);   // True
 SQL Anywhere:
 
 ```csharp
-var factory = new SqlAnywhereStatementParserFactory();
-var parser = new SqlAnywhereParser(factory);
+var parser = SqlForgeFactory.CreateParser(SqlDialect.SqlAnywhere);
 
 SqlStatement ast = parser.Parse("SELECT id, name FROM users WHERE active = 1");
 ```
@@ -75,8 +74,7 @@ SqlStatement ast = parser.Parse("SELECT id, name FROM users WHERE active = 1");
 Microsoft SQL Server:
 
 ```csharp
-var factory = new MsSqlServerStatementParserFactory();
-var parser = new MsSqlServerParser(factory);
+var parser = SqlForgeFactory.CreateParser(SqlDialect.MsSqlServer);
 
 SqlStatement ast = parser.Parse("SELECT TOP 10 WITH TIES id FROM users ORDER BY id DESC");
 ```
@@ -151,7 +149,7 @@ var select = new SelectStatement
 
 var statement = new SqlStatement
 {
-    Type = SqlStatementType.Select,
+    Type = StatementType.Select,
     Body = select
 };
 

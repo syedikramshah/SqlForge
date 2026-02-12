@@ -18,7 +18,7 @@ namespace SqlForge.Tests
             var factoryHolder = new StatementParserFactoryHolder();
             IExpressionParser expressionParser = new MsSqlExpressionParser(factoryHolder);
             var selectParser = new MsSqlSelectStatementParser(expressionParser, factoryHolder);
-            IStatementParserFactory factory = new MsSqlServerStatementParserFactory(selectParser);
+            IStatementParserFactory factory = new MsSqlServerStatementParserFactory(selectParser, expressionParser);
             factoryHolder.SetActualFactory(factory);
             _parser = new MsSqlServerParser(factory);
         }

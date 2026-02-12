@@ -23,7 +23,8 @@ namespace SqlForge.Tests
             IExpressionParser expressionParser = new SqlAnywhereExpressionParser(statementParserFactoryHolder);
             IStatementParser selectStatementParser = new SelectStatementParser(expressionParser, statementParserFactoryHolder);
             IStatementParserFactory actualStatementParserFactory = new SqlAnywhereStatementParserFactory(
-                (SelectStatementParser)selectStatementParser
+                (SelectStatementParser)selectStatementParser,
+                expressionParser
             );
             statementParserFactoryHolder.SetActualFactory(actualStatementParserFactory);
             _parser = new SqlAnywhereParser(actualStatementParserFactory);
@@ -289,6 +290,32 @@ namespace SqlForge.Tests
             var output = reconstructor.Reconstruct(ast);
 
             Assert.AreEqual(Normalize(sql), Normalize(output));
+        }
+
+        [TestMethod]
+        public void RoundTrip_CreateTable_WithConstraints_IsStable()
+        {
+            var sql = "CREATE TABLE Users (Id INT IDENTITY(1,1) PRIMARY KEY, ParentId INT, Name VARCHAR(50) NOT NULL, " +
+                      "CONSTRAINT FK_Users_Parent FOREIGN KEY (ParentId) REFERENCES Users(Id) ON DELETE CASCADE, " +
+                      "CHECK (Id > 0));";
+            var ast1 = _parser.Parse(sql);
+            var recon1 = _reconstructor.Reconstruct(ast1, SqlDialect.SqlAnywhere);
+            var ast2 = _parser.Parse(recon1, SqlDialect.SqlAnywhere);
+            var recon2 = _reconstructor.Reconstruct(ast2, SqlDialect.SqlAnywhere);
+
+            Assert.AreEqual(Normalize(recon1), Normalize(recon2));
+        }
+
+        [TestMethod]
+        public void RoundTrip_CreateIndex_IsStable()
+        {
+            var sql = "CREATE UNIQUE INDEX IX_Users_Name ON Users (Name DESC);";
+            var ast1 = _parser.Parse(sql);
+            var recon1 = _reconstructor.Reconstruct(ast1, SqlDialect.SqlAnywhere);
+            var ast2 = _parser.Parse(recon1, SqlDialect.SqlAnywhere);
+            var recon2 = _reconstructor.Reconstruct(ast2, SqlDialect.SqlAnywhere);
+
+            Assert.AreEqual(Normalize(recon1), Normalize(recon2));
         }
     }
 }

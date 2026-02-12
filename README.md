@@ -9,10 +9,11 @@ A powerful SQL parser, AST generator, and query reconstructor library for .NET. 
 ## Features
 
 - **SQL Tokenization** - Full lexical analysis with support for keywords, identifiers, literals, operators, and comments
+- **Dialect-Aware Keywords** - Token classification uses a dialect-aware keyword registry to reduce collisions
 - **AST Generation** - Parse SQL into a traversable Abstract Syntax Tree
 - **SQL Reconstruction** - Rebuild valid SQL from AST nodes
 - **SQL Formatting** - Pretty-print AST for debugging and visualization
-- **Dialect Support** - SQL Anywhere and Microsoft SQL Server parsers, reconstructors, and formatters
+- **Dialect Support** - SQL Anywhere, Microsoft SQL Server, and MySQL parsers, reconstructors, and formatters
 - **Complex Query Support** - Handles subqueries, JOINs, set operators, window functions, and nested expressions
 - **MSSQL Extensions** - TOP, OFFSET/FETCH, CTEs, APPLY, table hints, and window frames
 
@@ -33,7 +34,7 @@ dotnet add package SqlForge
 ### PackageReference
 
 ```xml
-<PackageReference Include="SqlForge" Version="1.1.0" />
+<PackageReference Include="SqlForge" Version="1.2.0" />
 ```
 
 ## Quick Start
@@ -42,10 +43,11 @@ dotnet add package SqlForge
 using SqlForge.Parsers;
 using SqlForge.Reconstructors;
 using SqlForge.Formatters;
+using SqlForge.Enums;
+using SqlForge;
 
-// Create parser with statement factory
-var factory = new SqlAnywhereStatementParserFactory();
-var parser = new SqlAnywhereParser(factory);
+// Create parser via factory
+var parser = SqlForgeFactory.CreateParser(SqlDialect.SqlAnywhere);
 
 // Parse a SQL query
 var ast = parser.Parse("SELECT id, name FROM users WHERE active = 1");
@@ -64,10 +66,11 @@ string formatted = formatter.Format(ast);
 using SqlForge.Parsers;
 using SqlForge.Reconstructors;
 using SqlForge.Formatters;
+using SqlForge.Enums;
+using SqlForge;
 
 // MSSQL parser and reconstructor
-var msFactory = new MsSqlServerStatementParserFactory();
-var msParser = new MsSqlServerParser(msFactory);
+var msParser = SqlForgeFactory.CreateParser(SqlDialect.MsSqlServer);
 var msAst = msParser.Parse("SELECT TOP 10 WITH TIES id FROM users ORDER BY id DESC");
 
 var msReconstructor = new MsSqlServerReconstructor();
@@ -92,8 +95,7 @@ string msFormatted = msFormatter.Format(msAst);
 
 ```csharp
 // Create the parser
-var factory = new SqlAnywhereStatementParserFactory();
-var parser = new SqlAnywhereParser(factory);
+var parser = SqlForgeFactory.CreateParser(SqlDialect.SqlAnywhere);
 
 // Parse SQL into AST
 SqlStatement ast = parser.Parse("SELECT * FROM customers");
@@ -135,6 +137,8 @@ string sql = reconstructor.Reconstruct(ast, SqlDialect.SqlAnywhere);
 
 Note: For Microsoft SQL Server, when an identifier was parsed as quoted but the original quote style is unknown, the reconstructor defaults to square brackets (`[name]`) to avoid reliance on `QUOTED_IDENTIFIER`.
 
+Reconstructors are strict by design: if an AST node is not supported for the selected dialect, a `NotSupportedException` is thrown to avoid emitting invalid SQL. Treat this as a signal to extend the dialect implementation or pre-filter unsupported nodes.
+
 ### Tokenization
 
 ```csharp
@@ -153,6 +157,15 @@ foreach (var token in tokens)
 // Keyword: FROM
 // Identifier: users
 // EOF:
+```
+
+```csharp
+// Dialect-aware keyword tokenization
+var tsqlTokenizer = new Tokenizer("SELECT MERGE FROM users", SqlDialect.MsSqlServer);
+var sqlAnywhereTokenizer = new Tokenizer("SELECT MERGE FROM users", SqlDialect.SqlAnywhere);
+
+Console.WriteLine(tsqlTokenizer.Tokenize()[1].Type);       // Keyword
+Console.WriteLine(sqlAnywhereTokenizer.Tokenize()[1].Type); // Identifier
 ```
 
 ### AST Formatting
@@ -423,8 +436,9 @@ public enum JoinType
 public enum QuoteStyle
 {
     None,
-    DoubleQuotes,
-    SquareBrackets
+    DoubleQuote,
+    SquareBracket,
+    Backtick
 }
 ```
 

@@ -32,7 +32,8 @@ namespace SqlForge.Tests
             // 4. Instantiate the concrete Statement Parser Factory.
             //    It takes the specific statement parsers it needs to orchestrate.
             IStatementParserFactory actualStatementParserFactory = new SqlAnywhereStatementParserFactory(
-                (SelectStatementParser)selectStatementParser // Cast to concrete type as the factory expects it.
+                (SelectStatementParser)selectStatementParser,
+                expressionParser
             );
 
             // 5. "Wire" the actual factory into the holder. This completes the cycle.
@@ -299,15 +300,16 @@ namespace SqlForge.Tests
             var statement = _parser.Parse(sql);
             var selectStmt = statement.Body as SelectStatement;
 
-            var condition = selectStmt.WhereClause.Condition as BinaryExpression;
-            Assert.AreEqual("IN", condition.Operator);
+            var condition = selectStmt.WhereClause.Condition as InExpression;
+            Assert.IsNotNull(condition);
+            Assert.IsFalse(condition.IsNegated);
 
-            var nestedSubquery = condition.Right as SubqueryExpression;
+            var nestedSubquery = condition.Subquery;
             Assert.IsNotNull(nestedSubquery);
-            Assert.AreEqual(StatementType.Select, nestedSubquery.SubqueryStatement.Type);
+            Assert.AreEqual(StatementType.Select, nestedSubquery.Type);
 
             // Check the content of the nested subquery
-            var innerSelect = nestedSubquery.SubqueryStatement.Body as SelectStatement;
+            var innerSelect = nestedSubquery.Body as SelectStatement;
             Assert.IsNotNull(innerSelect);
             Assert.AreEqual(1, innerSelect.SelectItems.Count);
             Assert.AreEqual("UserID", (innerSelect.SelectItems[0].Expression as ColumnExpression).ColumnName);
@@ -325,6 +327,19 @@ namespace SqlForge.Tests
             var condition = selectStmt.WhereClause.Condition as UnaryExpression;
             Assert.AreEqual("EXISTS", condition.Operator);
             Assert.IsInstanceOfType(condition.Expression, typeof(SubqueryExpression));
+        }
+
+        [TestMethod]
+        public void Parse_UnionAll_PreservesOperator()
+        {
+            var sql = "SELECT id FROM a UNION ALL SELECT id FROM b;";
+            var statement = _parser.Parse(sql);
+
+            var setOp = statement.Body as SetOperatorExpression;
+            Assert.IsNotNull(setOp);
+            Assert.AreEqual(SetOperatorType.UnionAll, setOp.Operator);
+            Assert.IsInstanceOfType(setOp.Left, typeof(SelectStatement));
+            Assert.IsInstanceOfType(setOp.Right, typeof(SelectStatement));
         }
 
         [TestMethod]
@@ -417,17 +432,17 @@ namespace SqlForge.Tests
             Assert.IsNotNull(selectStmt);
             Assert.AreEqual(5, selectStmt.SelectItems.Count);
 
-            var whereCondition = selectStmt.WhereClause?.Condition as BinaryExpression;
+            var whereCondition = selectStmt.WhereClause?.Condition as InExpression;
             Assert.IsNotNull(whereCondition);
-            Assert.AreEqual("IN", whereCondition.Operator);
+            Assert.IsFalse(whereCondition.IsNegated);
 
             // The right side of IN is a SubqueryExpression, not SetOperatorExpression directly
-            var inSubqueryExpr = whereCondition.Right as SubqueryExpression;
+            var inSubqueryExpr = whereCondition.Subquery;
             Assert.IsNotNull(inSubqueryExpr);
-            Assert.AreEqual(StatementType.Select, inSubqueryExpr.SubqueryStatement.Type); // SubqueryStatement itself is SqlStatement
+            Assert.AreEqual(StatementType.Select, inSubqueryExpr.Type); // SubqueryStatement itself is SqlStatement
 
             // The body of the SqlStatement within the SubqueryExpression is the SetOperatorExpression
-            var setOpExpr = inSubqueryExpr.SubqueryStatement.Body as SetOperatorExpression;
+            var setOpExpr = inSubqueryExpr.Body as SetOperatorExpression;
             Assert.IsNotNull(setOpExpr);
             Assert.AreEqual(SetOperatorType.Except, setOpExpr.Operator);
 
@@ -493,12 +508,12 @@ namespace SqlForge.Tests
             Assert.AreEqual("AND", innerWhereCondition.Operator);
 
             // The IN expression is on the right side of the outermost AND
-            var inSubqueryBinaryExpr = innerWhereCondition.Right as BinaryExpression;
-            Assert.AreEqual("IN", inSubqueryBinaryExpr.Operator);
-            var inSubquery = inSubqueryBinaryExpr.Right as SubqueryExpression;
-            Assert.IsNotNull(inSubquery);
+            var inSubqueryExpr = innerWhereCondition.Right as InExpression;
+            Assert.IsNotNull(inSubqueryExpr);
+            Assert.IsFalse(inSubqueryExpr.IsNegated);
+            Assert.IsNotNull(inSubqueryExpr.Subquery);
 
-            var setOpExpr = inSubquery.SubqueryStatement.Body as SetOperatorExpression;
+            var setOpExpr = inSubqueryExpr.Subquery.Body as SetOperatorExpression;
             Assert.IsNotNull(setOpExpr);
             Assert.AreEqual(SetOperatorType.Except, setOpExpr.Operator); // The outermost set operator
             Assert.IsNotNull(setOpExpr.Left as SetOperatorExpression); // (UNION ALL) part
@@ -509,18 +524,13 @@ namespace SqlForge.Tests
             var mainWhereCondition = selectStmt.WhereClause.Condition as BinaryExpression;
             Assert.AreEqual("AND", mainWhereCondition.Operator);
 
-            // The parser produces UnaryExpression {Operator="NOT", Expression=BinaryExpression{Operator="IN", ...}}
-            // So, mainWhereCondition.Right is a UnaryExpression (NOT)
-            var notInUnaryExpr = mainWhereCondition.Right as UnaryExpression;
-            Assert.IsNotNull(notInUnaryExpr);
-            Assert.AreEqual("NOT", notInUnaryExpr.Operator);
-            var actualInExpr = notInUnaryExpr.Expression as BinaryExpression;
-            Assert.IsNotNull(actualInExpr);
-            Assert.AreEqual("IN", actualInExpr.Operator);
+            var notInExpr = mainWhereCondition.Right as InExpression;
+            Assert.IsNotNull(notInExpr);
+            Assert.IsTrue(notInExpr.IsNegated);
 
-            var notInSubquery = actualInExpr.Right as SubqueryExpression;
+            var notInSubquery = notInExpr.Subquery;
             Assert.IsNotNull(notInSubquery);
-            Assert.AreEqual("BlockedUsers", ((notInSubquery.SubqueryStatement.Body as SelectStatement).FromClause.TableExpressions[0] as TableExpression).TableName);
+            Assert.AreEqual("BlockedUsers", ((notInSubquery.Body as SelectStatement).FromClause.TableExpressions[0] as TableExpression).TableName);
         }
 
         [TestMethod]
@@ -580,7 +590,7 @@ namespace SqlForge.Tests
             // Further drill down into B if needed
             var bGroup = rightOfOrGroup.Left as BinaryExpression;
             Assert.AreEqual("AND", bGroup.Operator);
-            Assert.AreEqual("IN", (bGroup.Right as BinaryExpression).Operator); // CustomerID IN (...)
+            Assert.IsNotNull(bGroup.Right as InExpression); // CustomerID IN (...)
 
             // C: NOT (Status = 'Cancelled' OR OrderType = 'Return')
             var cGroup = rightOfOrGroup.Right as UnaryExpression; // NOT (...)

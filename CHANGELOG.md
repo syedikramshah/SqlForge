@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+-
+
+### Fixed
+-
+
+### Documentation
+-
+
+### Changed
+-
+
+## [1.2.0] - 2026-02-12
+
+### Added
+- `DialectKeywordRegistry` for dialect-aware keyword classification and conflict handling.
+- Unit tests for keyword disambiguation across SQL Anywhere, MS SQL Server, and MySQL.
+
+### Fixed
+- IN list parsing now accepts full expressions instead of additive-only expressions.
+- SQL Anywhere reconstructor no longer emits `ON` for joins without conditions.
+
+### Documentation
+- Documented strict reconstructor behavior for unsupported AST nodes.
+
+### Changed
+- `Tokenizer` now accepts an optional `SqlDialect` and classifies keywords using the registry.
+- Dialect parser entry points pass dialect context into tokenization and parser context.
+- `ParserContext` keyword matching (`IsKeyword`, `MatchToken`, `ConsumeToken`) is now dialect-aware.
+
 ## [1.1.0] - 2026-02-09
 
 ### Added

@@ -13,20 +13,8 @@ namespace SqlForge.Utils
     public class Tokenizer
     {
         private readonly string _sql;
+        private readonly SqlDialect _dialect;
         private int _position;
-
-        private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "SELECT", "FROM", "WHERE", "AND", "OR", "GROUP", "BY", "HAVING", "ORDER", "AS",
-            "INSERT", "UPDATE", "DELETE", "CREATE", "TABLE", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "ON",
-            "DISTINCT", "TOP", "UNION", "ALL", "EXCEPT", "INTERSECT", "IN", "NOT", "NULL", "IS",
-            "COUNT", "SUM", "AVG", "MIN", "MAX", "SUBSTRING", "GETDATE",
-            "CASE", "WHEN", "THEN", "ELSE", "END", "EXISTS", "OUTER",
-            "LIKE", "ASC", "DESC",
-            "WITH", "OVER", "PARTITION", "OFFSET", "FETCH", "ROWS", "ROW", "ONLY",
-            "APPLY", "CROSS", "PERCENT", "TIES", "RANGE", "GROUPS", "NEXT", "FIRST",
-            "BETWEEN", "FOLLOWING", "PRECEDING", "UNBOUNDED", "CURRENT"
-        };
 
         private static readonly Dictionary<string, TokenType> Operators = new Dictionary<string, TokenType>(StringComparer.Ordinal)
         {
@@ -34,14 +22,16 @@ namespace SqlForge.Utils
             {"+", TokenType.Operator}, {"-", TokenType.Operator}, {"*", TokenType.Operator}, {"/", TokenType.Operator},
             {"%", TokenType.Operator}, {"&", TokenType.Operator}, {"|", TokenType.Operator}, {"^", TokenType.Operator},
             {"<=", TokenType.Operator}, {">=", TokenType.Operator}, {"<>", TokenType.Operator}, {"!=", TokenType.Operator},
-            {"||", TokenType.Operator}, {".", TokenType.Operator}
+            {"<=>", TokenType.Operator}, {"&&", TokenType.Operator}, {"||", TokenType.Operator},
+            {"<<", TokenType.Operator}, {">>", TokenType.Operator}, {"~", TokenType.Operator}, {".", TokenType.Operator}
         };
 
         private static readonly HashSet<char> Delimiters = new HashSet<char> { ',', '(', ')', ';' };
 
-        public Tokenizer(string sql)
+        public Tokenizer(string sql, SqlDialect dialect = SqlDialect.Generic)
         {
             _sql = sql ?? throw new ArgumentNullException(nameof(sql));
+            _dialect = dialect;
         }
         public List<Token> Tokenize()
         {
@@ -134,7 +124,7 @@ namespace SqlForge.Utils
                         _position++;
                     string value = _sql.Substring(start, _position - start);
                     tokens.Add(new Token(
-                        Keywords.Contains(value) ? TokenType.Keyword : TokenType.Identifier,
+                        DialectKeywordRegistry.IsKeyword(value, _dialect) ? TokenType.Keyword : TokenType.Identifier,
                         value, start, value.Length));
                     continue;
                 }
@@ -170,6 +160,7 @@ namespace SqlForge.Utils
                     int start = _position;
                     _position++;
                     var sb = new StringBuilder();
+                    bool closed = false;
 
                     while (_position < _sql.Length)
                     {
@@ -183,6 +174,7 @@ namespace SqlForge.Utils
                             else
                             {
                                 _position++;
+                                closed = true;
                                 break;
                             }
                         }
@@ -193,7 +185,52 @@ namespace SqlForge.Utils
                         }
                     }
 
+                    if (!closed)
+                    {
+                        throw new SqlParseException($"Unterminated quoted identifier starting at {start}", start);
+                    }
+
                     tokens.Add(new Token(TokenType.Identifier, sb.ToString(), start, _position - start, QuoteStyle.DoubleQuote));
+                    continue;
+                }
+
+                // Backtick delimited identifier: `Name``With``Ticks`
+                if (currentChar == '`')
+                {
+                    int start = _position;
+                    _position++;
+                    var sb = new StringBuilder();
+                    bool closed = false;
+
+                    while (_position < _sql.Length)
+                    {
+                        if (_sql[_position] == '`')
+                        {
+                            if (_position + 1 < _sql.Length && _sql[_position + 1] == '`')
+                            {
+                                sb.Append('`');
+                                _position += 2;
+                            }
+                            else
+                            {
+                                _position++;
+                                closed = true;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            sb.Append(_sql[_position]);
+                            _position++;
+                        }
+                    }
+
+                    if (!closed)
+                    {
+                        throw new SqlParseException($"Unterminated backtick identifier starting at {start}", start);
+                    }
+
+                    tokens.Add(new Token(TokenType.Identifier, sb.ToString(), start, _position - start, QuoteStyle.Backtick));
                     continue;
                 }
 

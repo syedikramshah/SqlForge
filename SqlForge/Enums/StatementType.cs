@@ -14,10 +14,13 @@ namespace SqlForge.Enums
         Unknown,
         Select,
         Insert,
+        Replace,
         Update,
         Delete,
         Create,
+        CreateIndex,
         Drop,
+        DropIndex,
         Alter
     }
 }

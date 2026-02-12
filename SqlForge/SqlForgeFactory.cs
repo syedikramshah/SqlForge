@@ -17,6 +17,8 @@ namespace SqlForge
                     return CreateSqlAnywhereParser();
                 case SqlDialect.MsSqlServer:
                     return CreateMsSqlServerParser();
+                case SqlDialect.MySql:
+                    return CreateMySqlParser();
                 default:
                     throw new NotSupportedException($"Dialect {dialect} not supported");
             }
@@ -30,6 +32,8 @@ namespace SqlForge
                     return new SqlAnywhereReconstructor();
                 case SqlDialect.MsSqlServer:
                     return new MsSqlServerReconstructor();
+                case SqlDialect.MySql:
+                    return new MySqlReconstructor();
                 default:
                     throw new NotSupportedException($"Dialect {dialect} not supported");
             }
@@ -43,6 +47,8 @@ namespace SqlForge
                     return new SqlAnywhereFormatter();
                 case SqlDialect.MsSqlServer:
                     return new MsSqlServerFormatter();
+                case SqlDialect.MySql:
+                    return new MySqlFormatter();
                 default:
                     throw new NotSupportedException($"Dialect {dialect} not supported");
             }
@@ -53,7 +59,7 @@ namespace SqlForge
             var factoryHolder = new StatementParserFactoryHolder();
             var expressionParser = new SqlAnywhereExpressionParser(factoryHolder);
             var selectParser = new SelectStatementParser(expressionParser, factoryHolder);
-            var factory = new SqlAnywhereStatementParserFactory(selectParser);
+            var factory = new SqlAnywhereStatementParserFactory(selectParser, expressionParser);
             factoryHolder.SetActualFactory(factory);
             return new SqlAnywhereParser(factory);
         }
@@ -63,9 +69,19 @@ namespace SqlForge
             var factoryHolder = new StatementParserFactoryHolder();
             var expressionParser = new MsSqlExpressionParser(factoryHolder);
             var selectParser = new MsSqlSelectStatementParser(expressionParser, factoryHolder);
-            var factory = new MsSqlServerStatementParserFactory(selectParser);
+            var factory = new MsSqlServerStatementParserFactory(selectParser, expressionParser);
             factoryHolder.SetActualFactory(factory);
             return new MsSqlServerParser(factory);
+        }
+
+        private static ISqlParser CreateMySqlParser()
+        {
+            var factoryHolder = new StatementParserFactoryHolder();
+            var expressionParser = new MySqlExpressionParser(factoryHolder);
+            var selectParser = new MySqlSelectStatementParser(expressionParser, factoryHolder);
+            var factory = new MySqlStatementParserFactory(selectParser, expressionParser);
+            factoryHolder.SetActualFactory(factory);
+            return new MySqlParser(factory);
         }
     }
 }

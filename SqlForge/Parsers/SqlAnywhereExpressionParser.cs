@@ -27,19 +27,14 @@ namespace SqlForge.Parsers
         /// </summary>
         public ISqlNode Parse(IParserContext context)
         {
-            Console.WriteLine($"[EXPR] Enter Parse. Current token: '{context.CurrentToken().Value}' ({context.CurrentToken().Type})");
             ISqlNode left = ParseAndExpression(context);
-            Console.WriteLine($"[EXPR] After ParseAndExpression, left is {left.GetType().Name}. Current token: '{context.CurrentToken().Value}'");
 
             while (context.IsKeyword("OR"))
             {
-                Console.WriteLine($"[EXPR] Found 'OR'. Left is {left.GetType().Name}");
                 var opToken = context.ConsumeToken("OR");
                 ISqlNode right = ParseAndExpression(context);
                 left = new BinaryExpression { Left = left, Operator = opToken.Value.ToUpperInvariant(), Right = right };
-                Console.WriteLine($"[EXPR] Formed BinaryExpression (OR): {((BinaryExpression)left).Left.GetType().Name} {((BinaryExpression)left).Operator} {((BinaryExpression)left).Right.GetType().Name}. Next token: '{context.CurrentToken().Value}'");
             }
-            Console.WriteLine($"[EXPR] Exit Parse. Returning {left.GetType().Name}. Current token: '{context.CurrentToken().Value}'");
             return left;
         }
 
@@ -47,21 +42,16 @@ namespace SqlForge.Parsers
         /// <summary>
         /// Parses logical AND expressions.
         /// </summary>
-         private ISqlNode ParseAndExpression(IParserContext context)
+        private ISqlNode ParseAndExpression(IParserContext context)
         {
-            Console.WriteLine($"  [AND] Enter ParseAndExpression. Current token: '{context.CurrentToken().Value}'");
             ISqlNode left = ParseComparisonExpression(context);
-            Console.WriteLine($"  [AND] After ParseComparisonExpression, left is {left.GetType().Name}. Current token: '{context.CurrentToken().Value}'");
 
             while (context.IsKeyword("AND"))
             {
-                Console.WriteLine($"  [AND] Found 'AND'. Left is {left.GetType().Name}");
                 var opToken = context.ConsumeToken("AND");
                 ISqlNode right = ParseComparisonExpression(context);
                 left = new BinaryExpression { Left = left, Operator = opToken.Value.ToUpperInvariant(), Right = right };
-                Console.WriteLine($"  [AND] Formed BinaryExpression (AND): {((BinaryExpression)left).Left.GetType().Name} {((BinaryExpression)left).Operator} {((BinaryExpression)left).Right.GetType().Name}. Next token: '{context.CurrentToken().Value}'");
             }
-            Console.WriteLine($"  [AND] Exit ParseAndExpression. Returning {left.GetType().Name}. Current token: '{context.CurrentToken().Value}'");
             return left;
         }
 
@@ -125,51 +115,12 @@ namespace SqlForge.Parsers
             }
             else if (context.IsKeyword("IN")) // Original IN block
             {
-                context.ConsumeToken("IN");
-                context.ConsumeToken("(", TokenType.Parenthesis);
-
-                ISqlNode inRight;
-                if (context.IsKeyword("SELECT") || (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
-                {
-                    inRight = new SubqueryExpression { SubqueryStatement = _statementParserFactory.ParseStatement(context) };
-                }
-                else
-                {
-                    var inArguments = new List<ISqlNode>();
-                    do { inArguments.Add(Parse(context)); } while (context.MatchToken(",", TokenType.Comma));
-                    inRight = new FunctionCallExpression { FunctionName = "IN_LIST", Arguments = inArguments };
-                }
-                context.ConsumeToken(")", TokenType.Parenthesis);
-
-                left = new BinaryExpression { Left = left, Operator = "IN", Right = inRight };
-                Console.WriteLine($"    [COMP] Formed BinaryExpression (IN): {((BinaryExpression)left).Left.GetType().Name} {((BinaryExpression)left).Operator} {((BinaryExpression)left).Right.GetType().Name}. Next token: '{context.CurrentToken().Value}'");
+                left = ParseInExpression(context, left, false);
             }
             // THIS IS THE NEW PART FOR NOT IN
             else if (context.IsKeyword("NOT") && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("IN", StringComparison.OrdinalIgnoreCase))
             {
-                context.ConsumeToken("NOT"); // Consume NOT
-                context.ConsumeToken("IN"); // Consume IN
-                context.ConsumeToken("(", TokenType.Parenthesis); // Consume (
-
-                ISqlNode inRight;
-                if (context.IsKeyword("SELECT") || (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
-                {
-                    inRight = new SubqueryExpression { SubqueryStatement = _statementParserFactory.ParseStatement(context) };
-                }
-                else
-                {
-                    var inArguments = new List<ISqlNode>();
-                    do { inArguments.Add(Parse(context)); } while (context.MatchToken(",", TokenType.Comma));
-                    inRight = new FunctionCallExpression { FunctionName = "IN_LIST", Arguments = inArguments };
-                }
-                context.ConsumeToken(")", TokenType.Parenthesis); // Consume )
-
-                // Form the BinaryExpression for IN
-                var inExpression = new BinaryExpression { Left = left, Operator = "IN", Right = inRight };
-
-                // Wrap it in a UnaryExpression for NOT
-                left = new UnaryExpression { Operator = "NOT", Expression = inExpression };
-                Console.WriteLine($"    [COMP] Formed UnaryExpression (NOT IN): {((UnaryExpression)left).Operator} {((UnaryExpression)left).Expression.GetType().Name}. Next token: '{context.CurrentToken().Value}'");
+                left = ParseInExpression(context, left, true);
             }
 
             return left;
@@ -372,6 +323,39 @@ namespace SqlForge.Parsers
                    keyword.Equals("MAX", StringComparison.OrdinalIgnoreCase) ||
                    keyword.Equals("SUBSTRING", StringComparison.OrdinalIgnoreCase) ||
                    keyword.Equals("GETDATE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private InExpression ParseInExpression(IParserContext context, ISqlNode left, bool isNegated)
+        {
+            if (isNegated)
+            {
+                context.ConsumeToken("NOT");
+            }
+
+            context.ConsumeToken("IN");
+            context.ConsumeToken("(", TokenType.Parenthesis);
+
+            var inExpression = new InExpression
+            {
+                Expression = left,
+                IsNegated = isNegated
+            };
+
+            if (context.IsKeyword("SELECT") ||
+                (context.PeekToken().Type == TokenType.Parenthesis && context.PeekToken(1).Type == TokenType.Keyword && context.PeekToken(1).Value.Equals("SELECT", StringComparison.OrdinalIgnoreCase)))
+            {
+                inExpression.Subquery = _statementParserFactory.ParseStatement(context);
+            }
+            else
+            {
+                do
+                {
+                    inExpression.Values.Add(Parse(context));
+                } while (context.MatchToken(",", TokenType.Comma));
+            }
+
+            context.ConsumeToken(")", TokenType.Parenthesis);
+            return inExpression;
         }
     }
 }

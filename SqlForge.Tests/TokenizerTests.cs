@@ -34,7 +34,7 @@ namespace SqlForge.Tests
         public void Tokenize_Keywords_CorrectlyIdentified()
         {
             // Added OUTER to the test string and expected types
-            var tokenizer = new Tokenizer("SELECT FROM WHERE AND OR GROUP BY HAVING ORDER AS INNER LEFT RIGHT FULL ON LIKE IN NOT NULL IS EXISTS OUTER");
+            var tokenizer = new Tokenizer("SELECT FROM WHERE AND OR GROUP BY HAVING ORDER AS INNER LEFT RIGHT FULL ON LIKE IN NOT NULL IS EXISTS OUTER LIMIT");
             var tokens = tokenizer.Tokenize();
             var expectedTypes = new List<TokenType>
             {
@@ -42,7 +42,7 @@ namespace SqlForge.Tests
                 TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword,
                 TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword,
                 TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.Keyword,
-                TokenType.Keyword, TokenType.Keyword, TokenType.EOF // Added TokenType.Keyword for OUTER
+                TokenType.Keyword, TokenType.Keyword, TokenType.Keyword, TokenType.EOF // Added TokenType.Keyword for OUTER
             };
             CollectionAssert.AreEqual(expectedTypes, tokens.Select(t => t.Type).ToList());
             Assert.AreEqual("SELECT", tokens[0].Value);
@@ -91,9 +91,9 @@ namespace SqlForge.Tests
         [TestMethod]
         public void Tokenize_Operators_CorrectlyIdentified()
         {
-            var tokenizer = new Tokenizer("= <> != < > <= >= + - * / % & | ^ || .");
+            var tokenizer = new Tokenizer("= <> != < > <= >= <=> + - * / % & | ^ && || << >> ~ .");
             var tokens = tokenizer.Tokenize();
-            var expectedValues = new List<string> { "=", "<>", "!=", "<", ">", "<=", ">=", "+", "-", "*", "/", "%", "&", "|", "^", "||", "." };
+            var expectedValues = new List<string> { "=", "<>", "!=", "<", ">", "<=", ">=", "<=>", "+", "-", "*", "/", "%", "&", "|", "^", "&&", "||", "<<", ">>", "~", "." };
             CollectionAssert.AreEqual(expectedValues, tokens.Take(expectedValues.Count).Select(t => t.Value).ToList());
             Assert.IsTrue(tokens.Take(expectedValues.Count).All(t => t.Type == TokenType.Operator));
             Assert.AreEqual(TokenType.EOF, tokens.Last().Type);
@@ -165,6 +165,14 @@ namespace SqlForge.Tests
             var tokenizer = new Tokenizer("SELECT 'unterminated string");
             var ex = Assert.ThrowsException<SqlParseException>(() => tokenizer.Tokenize());
             StringAssert.Contains("Unterminated string literal starting at 7", ex.Message);
+        }
+
+        [TestMethod]
+        public void Tokenize_UnterminatedQuotedIdentifier_ThrowsException()
+        {
+            var tokenizer = new Tokenizer("SELECT \"unterminated");
+            var ex = Assert.ThrowsException<SqlParseException>(() => tokenizer.Tokenize());
+            StringAssert.Contains("Unterminated quoted identifier starting at 7", ex.Message);
         }
 
         [TestMethod]
@@ -280,11 +288,37 @@ namespace SqlForge.Tests
         }
 
         [TestMethod]
+        public void Tokenize_BacktickIdentifier_EscapedCorrectly()
+        {
+            var sql = "SELECT `Well``ID` FROM `Wells``Archive`";
+            var tokenizer = new Tokenizer(sql);
+
+            var tokens = tokenizer.Tokenize();
+
+            var firstIdentifier = tokens.First(t => t.Type == TokenType.Identifier);
+            var secondIdentifier = tokens.Where(t => t.Type == TokenType.Identifier).Skip(1).First();
+
+            Assert.AreEqual("Well`ID", firstIdentifier.Value);
+            Assert.IsTrue(firstIdentifier.IsQuoted);
+            Assert.IsTrue(firstIdentifier.IsBacktickQuoted);
+            Assert.AreEqual("Wells`Archive", secondIdentifier.Value);
+            Assert.IsTrue(secondIdentifier.IsBacktickQuoted);
+        }
+
+        [TestMethod]
         public void Tokenize_BracketedIdentifier_Unterminated_ThrowsException()
         {
             var tokenizer = new Tokenizer("SELECT [WellName FROM Wells");
             var ex = Assert.ThrowsException<SqlParseException>(() => tokenizer.Tokenize());
             StringAssert.Contains(ex.Message, "Unterminated bracketed identifier");
+        }
+
+        [TestMethod]
+        public void Tokenize_BacktickIdentifier_Unterminated_ThrowsException()
+        {
+            var tokenizer = new Tokenizer("SELECT `WellName FROM Wells");
+            var ex = Assert.ThrowsException<SqlParseException>(() => tokenizer.Tokenize());
+            StringAssert.Contains(ex.Message, "Unterminated backtick identifier");
         }
 
         [TestMethod]
@@ -302,13 +336,14 @@ namespace SqlForge.Tests
         [TestMethod]
         public void Tokenize_QuotedIdentifier_TracksQuoteStyle()
         {
-            var tokenizer = new Tokenizer("SELECT \"A\", [B] FROM T");
+            var tokenizer = new Tokenizer("SELECT \"A\", [B], `C` FROM T");
             var tokens = tokenizer.Tokenize();
 
             var quotedIdentifiers = tokens.Where(t => t.Type == TokenType.Identifier && t.IsQuoted).ToList();
-            Assert.AreEqual(2, quotedIdentifiers.Count);
+            Assert.AreEqual(3, quotedIdentifiers.Count);
             Assert.IsTrue(quotedIdentifiers.Any(t => t.Value == "A" && t.IsDoubleQuoted));
             Assert.IsTrue(quotedIdentifiers.Any(t => t.Value == "B" && t.IsSquareBracketed));
+            Assert.IsTrue(quotedIdentifiers.Any(t => t.Value == "C" && t.IsBacktickQuoted));
         }
 
         [TestMethod]

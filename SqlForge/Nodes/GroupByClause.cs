@@ -14,5 +14,6 @@ namespace SqlForge.Nodes
     public class GroupByClause : AbstractSqlNode
     {
         public List<ISqlNode> GroupingExpressions { get; set; } = new List<ISqlNode>();
+        public bool WithRollup { get; set; }
     }
 }

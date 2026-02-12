@@ -20,6 +20,7 @@ namespace SqlForge.Enums
         Full,
         Cross,
         Natural,
+        Straight,
         CrossApply,
         OuterApply
     }

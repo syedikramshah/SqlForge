@@ -42,13 +42,19 @@ namespace SqlForge.Nodes
     public class SelectStatement : AbstractSqlNode
     {
         public List<SelectExpression> SelectItems { get; set; } = new List<SelectExpression>();
+        public List<string> SelectModifiers { get; set; } = new List<string>();
         public FromClause FromClause { get; set; }
         public WhereClause WhereClause { get; set; }
         public GroupByClause GroupByClause { get; set; }
         public HavingClause HavingClause { get; set; }
         public OrderByClause OrderByClause { get; set; }
+        public SelectIntoClause IntoClause { get; set; }
         public TopClause TopClause { get; set; }
         public OffsetFetchClause OffsetFetchClause { get; set; }
+        public LimitClause LimitClause { get; set; }
         public bool IsDistinct { get; set; }
+        public bool IsDistinctRow { get; set; }
+        public bool ForUpdate { get; set; }
+        public bool LockInShareMode { get; set; }
     }
 }
